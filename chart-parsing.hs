@@ -82,12 +82,10 @@ parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set
        Produce message ->
          LSet.insert (message, i - rule_start) (messages rule_start)
        Require f ->
-         if i == n
-         then return () -- nothing can start after the end of the string
-         else 
          LSet.forEach (messages i) $ \(m, m_length) -> do
            let next_rule = f m
            LSet.insert (rule_start, next_rule) (rules (i + m_length))
   return $ snd $ shares V.! 0
 
 test () = parse interpretRuleSyntax (const True) allRules [A, B, A, A, B, A, Dot]
+main = mapM_ print $ test ()

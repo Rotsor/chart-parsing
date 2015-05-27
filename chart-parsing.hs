@@ -83,9 +83,8 @@ parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set
          LSet.insert (message, i - rule_start) (messages rule_start)
        Require f ->
          LSet.forEach (messages i) $ \(m, m_length) -> do
-           let next_rule = f m
-           LSet.insert (rule_start, next_rule) (rules (i + m_length))
-  return $ snd $ shares V.! 0
+           LSet.insert (rule_start, f m) (rules (i + m_length))
+  return $ messages 0
 
 test () = parse interpretRuleSyntax (const True) allRules [A, B, A, A, B, A, Dot]
 main = mapM_ print $ test ()

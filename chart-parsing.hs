@@ -41,18 +41,18 @@ allRules = [AList_base, AList_recursive0, BList_base, BList_recursive0, Sentence
 
 simpleRule a b = Require (\s -> if s == a then ProduceS b else FailS)
 
-interpretRuleSyntax :: RuleSyntax -> Rule Sym RuleSyntax
-interpretRuleSyntax FailS = Fail
-interpretRuleSyntax (ProduceS sym) = Produce sym
-interpretRuleSyntax AList_base = simpleRule A (AList [()])
-interpretRuleSyntax AList_recursive0 = Require (\case { A -> AList_recursive1; _ -> FailS })
-interpretRuleSyntax AList_recursive1 = Require (\case { AList l -> ProduceS (AList (() : l)); _ -> FailS })
-interpretRuleSyntax BList_base = Require (\case { AList l -> ProduceS (BSeparatedALists [l]); _ -> FailS})
-interpretRuleSyntax BList_recursive0 = Require (\case { BSeparatedALists l -> BList_recursive1 l; _ -> FailS})
-interpretRuleSyntax (BList_recursive1 l) = Require (\case { B -> BList_recursive2 l; _ -> FailS})
-interpretRuleSyntax (BList_recursive2 l1) = Require (\case { BSeparatedALists l2 -> ProduceS (BSeparatedALists $ l1 ++ l2); _ -> FailS})
-interpretRuleSyntax Sentence0 = Require (\case { BSeparatedALists l -> Sentence1 l; _ -> FailS})
-interpretRuleSyntax (Sentence1 s) = Require (\case { Dot -> ProduceS (Sentence s) ; _ -> FailS })
+interpretRule :: RuleSyntax -> Rule Sym RuleSyntax
+interpretRule FailS = Fail
+interpretRule (ProduceS sym) = Produce sym
+interpretRule AList_base = simpleRule A (AList [()])
+interpretRule AList_recursive0 = Require (\case { A -> AList_recursive1; _ -> FailS })
+interpretRule AList_recursive1 = Require (\case { AList l -> ProduceS (AList (() : l)); _ -> FailS })
+interpretRule BList_base = Require (\case { AList l -> ProduceS (BSeparatedALists [l]); _ -> FailS})
+interpretRule BList_recursive0 = Require (\case { BSeparatedALists l -> BList_recursive1 l; _ -> FailS})
+interpretRule (BList_recursive1 l) = Require (\case { B -> BList_recursive2 l; _ -> FailS})
+interpretRule (BList_recursive2 l1) = Require (\case { BSeparatedALists l2 -> ProduceS (BSeparatedALists $ l1 ++ l2); _ -> FailS})
+interpretRule Sentence0 = Require (\case { BSeparatedALists l -> Sentence1 l; _ -> FailS})
+interpretRule (Sentence1 s) = Require (\case { Dot -> ProduceS (Sentence s) ; _ -> FailS })
 
 data Rule sym rule =
   Fail
@@ -62,29 +62,29 @@ data Rule sym rule =
 instance Frz.DeepFrz Sym where
   type FrzType Sym = Sym
 
+(!) = (V.!)
+
 parse :: (Ord sym, Ord rule, Frz.DeepFrz sym, Frz.FrzType sym ~ sym)
          => (rule -> Rule sym rule) -> (sym -> Bool) -> [rule] -> [sym] -> [(sym, Int)]
-parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set.toList $ ISet.fromISet $ Frz.runParThenFreeze $ do
+parse interpretRule is_good initial_rules s = filter (is_good . fst) $ Set.toList $ ISet.fromISet $ Frz.runParThenFreeze $ do
   let n = length s
-  let positions = V.generate (n + 1) id
-  shares <- traverse (\i -> (,) <$> ISet.newEmptySet <*> ISet.newEmptySet) positions
-  let messages i = snd $ shares V.! i
-  let rules i = fst $ shares V.! i
-  forM_ generic_rules $ \rule ->
+  messages <- V.replicateM (n + 1) ISet.newEmptySet
+  rules <- V.replicateM (n + 1) ISet.newEmptySet
+  forM_ initial_rules $ \rule ->
     forM_ [0..n-1] $ \i ->
-      ISet.insert (i, rule) (rules i)
+      ISet.insert (i, rule) (rules ! i)
   forM_ (zip [0..] s) $ \(i, word) ->
-    ISet.insert (word, 1) (snd $ shares V.! i)
+    ISet.insert (word, 1) (messages ! i)
   forM_ [0..n] $ \i ->
-    ISet.forEach (rules i) $ \(rule_start, rule) ->
-      case interpretRuleSyntax rule of
+    ISet.forEach (rules ! i) $ \(rule_start, rule) ->
+      case interpretRule rule of
        Fail -> return ()
        Produce message ->
-         ISet.insert (message, i - rule_start) (messages rule_start)
+         ISet.insert (message, i - rule_start) (messages ! rule_start)
        Require f ->
-         ISet.forEach (messages i) $ \(m, m_length) -> do
-           ISet.insert (rule_start, f m) (rules (i + m_length))
-  return $ messages 0
+         ISet.forEach (messages ! i) $ \(m, m_length) -> do
+           ISet.insert (rule_start, f m) (rules ! (i + m_length))
+  return $ messages ! 0
 
-test () = parse interpretRuleSyntax (const True) allRules [A, B, A, A, B, A, Dot]
+test () = parse interpretRule (const True) allRules [A, B, A, A, B, A, Dot]
 main = mapM_ print $ test ()

@@ -1,7 +1,7 @@
 {-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
-import qualified Data.LVar.PureSet as LSet
+import qualified Data.LVar.PureSet as ISet
 import qualified Data.Set as Set
 import Control.Applicative
 import qualified Control.LVish as LVish
@@ -64,26 +64,26 @@ instance Frz.DeepFrz Sym where
 
 parse :: (Ord sym, Ord rule, Frz.DeepFrz sym, Frz.FrzType sym ~ sym)
          => (rule -> Rule sym rule) -> (sym -> Bool) -> [rule] -> [sym] -> [(sym, Int)]
-parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set.toList $ LSet.fromISet $ Frz.runParThenFreeze $ do
+parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set.toList $ ISet.fromISet $ Frz.runParThenFreeze $ do
   let n = length s
   let positions = V.generate (n + 1) id
-  shares <- traverse (\i -> (,) <$> LSet.newEmptySet <*> LSet.newEmptySet) positions
+  shares <- traverse (\i -> (,) <$> ISet.newEmptySet <*> ISet.newEmptySet) positions
   let messages i = snd $ shares V.! i
   let rules i = fst $ shares V.! i
   forM_ generic_rules $ \rule ->
     forM_ [0..n-1] $ \i ->
-      LSet.insert (i, rule) (rules i)
+      ISet.insert (i, rule) (rules i)
   forM_ (zip [0..] s) $ \(i, word) ->
-    LSet.insert (word, 1) (snd $ shares V.! i)
+    ISet.insert (word, 1) (snd $ shares V.! i)
   forM_ [0..n] $ \i ->
-    LSet.forEach (rules i) $ \(rule_start, rule) ->
+    ISet.forEach (rules i) $ \(rule_start, rule) ->
       case interpretRuleSyntax rule of
        Fail -> return ()
        Produce message ->
-         LSet.insert (message, i - rule_start) (messages rule_start)
+         ISet.insert (message, i - rule_start) (messages rule_start)
        Require f ->
-         LSet.forEach (messages i) $ \(m, m_length) -> do
-           LSet.insert (rule_start, f m) (rules (i + m_length))
+         ISet.forEach (messages i) $ \(m, m_length) -> do
+           ISet.insert (rule_start, f m) (rules (i + m_length))
   return $ messages 0
 
 test () = parse interpretRuleSyntax (const True) allRules [A, B, A, A, B, A, Dot]

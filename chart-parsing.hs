@@ -80,7 +80,7 @@ parse interpretRuleSyntax is_good generic_rules s = filter (is_good . fst) $ Set
       case interpretRuleSyntax rule of
        Fail -> return ()
        Produce message ->
-         LSet.insert (message, i - rule_start) (messages i)
+         LSet.insert (message, i - rule_start) (messages rule_start)
        Require f ->
          if i == n
          then return () -- nothing can start after the end of the string
